@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-internal-secret']
 }));
 
 app.use(express.json());
@@ -176,6 +176,11 @@ app.post('/auth/google', async (req, res) => {
   try {
     // only allow requests from the frontend server with a secret key
     const internalSecret = process.env.INTERNAL_API_SECRET;
+    console.log('Guard check:', {
+      hasEnvSecret: !!internalSecret,
+      receivedHeader: req.headers['x-internal-secret'] ? 'present' : 'missing',
+      match: req.headers['x-internal-secret'] === internalSecret,
+    });
     if (!internalSecret || req.headers['x-internal-secret'] !== internalSecret) {
       return res.status(403).json({
         success: false,
