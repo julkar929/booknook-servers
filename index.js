@@ -237,6 +237,235 @@ app.get('/auth/me', verifyToken, async (req, res) => {
   }
 });
 
+/* ==========================================================================
+   BOOK ROUTES (8 Required APIs)
+   ========================================================================== */
+
+// 1. GET /books — get all books (public)
+// Supports query params: ?limit=6&sort=newest (for New Arrivals), ?category=..., ?search=..., ?userEmail=...
+app.get('/books', async (req, res) => {
+  try {
+    const { limit, sort, category, search, userEmail } = req.query;
+    const booksCol = getCollection('books');
+
+    const filter = {};
+    if (category && category !== 'All') {
+      filter.category = category;
+    }
+    if (userEmail) {
+      filter.userEmail = userEmail;
+    }
+
+    let cursor = booksCol.find(filter);
+
+    // Sorting: Newest first is default when sort=newest or by createdAt descending
+    const sortObj = (sort === 'newest' || !sort) ? { createdAt: -1 } : { createdAt: 1 };
+    cursor = cursor.sort(sortObj);
+
+    if (limit) {
+      cursor = cursor.limit(parseInt(limit, 10));
+    }
+
+    let books = await cursor.toArray();
+
+    // Client-side text filter if search parameter was provided
+    if (search && search.trim() !== '') {
+      const q = search.trim().toLowerCase();
+      books = books.filter(b => 
+        (b.title && b.title.toLowerCase().includes(q)) ||
+        (b.author && b.author.toLowerCase().includes(q)) ||
+        (b.category && b.category.toLowerCase().includes(q))
+      );
+    }
+
+    return res.json({
+      success: true,
+      count: books.length,
+      data: books
+    });
+  } catch (error) {
+    console.error('Error fetching books:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve books from database.'
+    });
+  }
+});
+
+// 2. GET /books/:id — get one book
+app.get('/books/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const booksCol = getCollection('books');
+    const book = await booksCol.findOne({ _id: formatId(id) });
+
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: 'Book not found.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: book
+    });
+  } catch (error) {
+    console.error('Error fetching book details:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve book details.'
+    });
+  }
+});
+
+// 3. POST /books — add a book (protected with JWT)
+app.post('/books', verifyToken, async (req, res) => {
+  try {
+    const { title, author, category, image, description, copies } = req.body;
+
+    if (!title || !author || !category || !image || !description) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields (title, author, category, image, description) are required.'
+      });
+    }
+
+    const totalCopies = parseInt(copies, 10);
+    if (isNaN(totalCopies) || totalCopies < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Total copies must be a valid number of at least 1.'
+      });
+    }
+
+    const newBook = {
+      title: title.trim(),
+      author: author.trim(),
+      category: category.trim(),
+      image: image.trim(),
+      description: description.trim(),
+      copies: totalCopies,
+      userEmail: req.user.email,
+      userName: req.user.name,
+      createdAt: new Date()
+    };
+
+    const booksCol = getCollection('books');
+    const result = await booksCol.insertOne(newBook);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Book added successfully to the library!',
+      data: {
+        ...newBook,
+        _id: result.insertedId
+      }
+    });
+  } catch (error) {
+    console.error('Error adding book:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to save book to database.'
+    });
+  }
+});
+
+// 4. PATCH /books/:id — update a book (protected with JWT)
+app.patch('/books/:id', verifyToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { title, author, category, image, description, copies } = req.body;
+    const booksCol = getCollection('books');
+
+    const existing = await booksCol.findOne({ _id: formatId(id) });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Book not found to update.'
+      });
+    }
+
+    // Security check: Only the user who added it can update it
+    if (existing.userEmail !== req.user.email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: You can only edit books that you added.'
+      });
+    }
+
+    const updateFields = {};
+    if (title !== undefined) updateFields.title = title.trim();
+    if (author !== undefined) updateFields.author = author.trim();
+    if (category !== undefined) updateFields.category = category.trim();
+    if (image !== undefined) updateFields.image = image.trim();
+    if (description !== undefined) updateFields.description = description.trim();
+    if (copies !== undefined) {
+      const numCopies = parseInt(copies, 10);
+      if (!isNaN(numCopies) && numCopies >= 0) {
+        updateFields.copies = numCopies;
+      }
+    }
+    updateFields.updatedAt = new Date();
+
+    await booksCol.updateOne(
+      { _id: formatId(id) },
+      { $set: updateFields }
+    );
+
+    const updated = await booksCol.findOne({ _id: formatId(id) });
+
+    return res.json({
+      success: true,
+      message: 'Book details updated successfully!',
+      data: updated
+    });
+  } catch (error) {
+    console.error('Error updating book:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update book.'
+    });
+  }
+});
+
+// 5. DELETE /books/:id — delete a book (protected with JWT)
+app.delete('/books/:id', verifyToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const booksCol = getCollection('books');
+
+    const existing = await booksCol.findOne({ _id: formatId(id) });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Book not found to delete.'
+      });
+    }
+
+    // Security check: User can delete only their own books
+    if (existing.userEmail !== req.user.email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: You can only delete books that you added.'
+      });
+    }
+
+    await booksCol.deleteOne({ _id: formatId(id) });
+
+    return res.json({
+      success: true,
+      message: 'Book deleted successfully from library.'
+    });
+  } catch (error) {
+    console.error('Error deleting book:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete book.'
+    });
+  }
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled Server Error:', err);
