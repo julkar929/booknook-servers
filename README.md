@@ -48,7 +48,7 @@ Create a `.env` file in the `server` root:
 ```env
 PORT=5000
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/booknook?retryWrites=true&w=majority
-JWT_SECRET=your_jwt_secret_key_here
+JWT_SECRET=jwt_secret_key_here
 CLIENT_URL=http://localhost:3000
 NODE_ENV=development
 ```
