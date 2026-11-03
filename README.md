@@ -3,8 +3,8 @@
 Backend API service for **BookNook – A Small Online Library**, built with Express.js, MongoDB, and JSON Web Token (JWT) authentication.
 
 ## 🚀 Live Site & API URLs
-- **Live Client Web App**: [https://booknook-library.vercel.app](https://booknook-library.vercel.app)
-- **Live Server API**: [https://booknook-api.vercel.app](https://booknook-api.vercel.app)
+- **Live Client Web App**: [https://booknook-abc.vercel.app](https://booknook-abc.vercel.app)
+- **Live Server API**: [https://booknook-servers.vercel.app](https://booknook-servers.vercel.app)
 
 ---
 
