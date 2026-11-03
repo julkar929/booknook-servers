@@ -171,9 +171,17 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// POST /auth/google - Social login
+// POST /auth/google - Social login (server-to-server only)
 app.post('/auth/google', async (req, res) => {
   try {
+    // only allow requests from the frontend server with a secret key
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+    if (!internalSecret || req.headers['x-internal-secret'] !== internalSecret) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden.'
+      });
+    }
     const { email, name, photoUrl } = req.body;
 
     if (!email) {
