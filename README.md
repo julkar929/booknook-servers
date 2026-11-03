@@ -4,7 +4,7 @@ Backend API service for **BookNook – A Small Online Library**, built with Expr
 
 ## 🚀 Live Site & API URLs
 - **Live Client Web App**: [https://booknook-library.vercel.app](https://booknook-library.vercel.app)
-- **Live Server API**: [https://booknook-api.onrender.com](https://booknook-api.onrender.com)
+- **Live Server API**: [https://booknook-api.vercel.app](https://booknook-api.vercel.app)
 
 ---
 
