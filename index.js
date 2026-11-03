@@ -466,6 +466,122 @@ app.delete('/books/:id', verifyToken, async (req, res) => {
   }
 });
 
+/* ==========================================================================
+   BORROW SYSTEM ROUTES
+   ========================================================================== */
+
+// 6. POST /borrows — borrow a book (protected with JWT)
+// Challenge Requirements:
+// 1. Available Copies: Decrease copies by 1 with $inc. If copies are 0, reject with error.
+// 2. No Double Borrow: User cannot borrow the same book twice simultaneously.
+app.post('/borrows', verifyToken, async (req, res) => {
+  try {
+    const { bookId, returnDate } = req.body;
+    const userEmail = req.user.email;
+    const userName = req.user.name;
+
+    if (!bookId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Book ID is required to borrow.'
+      });
+    }
+
+    const booksCol = getCollection('books');
+    const borrowsCol = getCollection('borrows');
+
+    const book = await booksCol.findOne({ _id: formatId(bookId) });
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: 'The requested book was not found.'
+      });
+    }
+
+    // Challenge 1: Check available copies
+    if (!book.copies || book.copies <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This book is currently out of stock / Not Available to borrow.'
+      });
+    }
+
+    // Challenge 2: No Double Borrow check
+    // Query borrows for matching bookId and userEmail
+    const existingBorrow = await borrowsCol.findOne({
+      bookId: book._id.toString ? book._id.toString() : book._id,
+      userEmail: userEmail
+    });
+
+    if (existingBorrow) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already borrowed this book! Please return your current copy before borrowing again.'
+      });
+    }
+
+    // Calculate default return date if not specified (e.g., 7 days from now)
+    const dueDate = returnDate ? new Date(returnDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // Save borrow record
+    const borrowRecord = {
+      bookId: book._id.toString ? book._id.toString() : book._id,
+      bookTitle: book.title,
+      bookImage: book.image,
+      userEmail: userEmail,
+      userName: userName,
+      borrowDate: new Date(),
+      returnDate: dueDate,
+      createdAt: new Date()
+    };
+
+    const result = await borrowsCol.insertOne(borrowRecord);
+
+    // Decrease available copies by 1 using $inc
+    await booksCol.updateOne(
+      { _id: formatId(book._id) },
+      { $inc: { copies: -1 } }
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: `Successfully borrowed "${book.title}"! Due date: ${dueDate.toLocaleDateString()}.`,
+      data: {
+        ...borrowRecord,
+        _id: result.insertedId
+      }
+    });
+  } catch (error) {
+    console.error('Error borrowing book:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to process book borrow.'
+    });
+  }
+});
+
+// 7. GET /borrows — get the borrows of the logged in user (protected with JWT)
+app.get('/borrows', verifyToken, async (req, res) => {
+  try {
+    const borrowsCol = getCollection('borrows');
+    const userEmail = req.user.email;
+
+    const userBorrows = await borrowsCol.find({ userEmail }).sort({ createdAt: -1 }).toArray();
+
+    return res.json({
+      success: true,
+      count: userBorrows.length,
+      data: userBorrows
+    });
+  } catch (error) {
+    console.error('Error fetching borrows:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve borrowed books.'
+    });
+  }
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled Server Error:', err);
