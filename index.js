@@ -59,6 +59,29 @@ app.post('/auth/register', async (req, res) => {
       });
     }
 
+    // Password Validation Requirements:
+    // 1. Must have an Uppercase letter
+    // 2. Must have a Lowercase letter
+    // 3. Length must be at least 6 characters
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long.'
+      });
+    }
+    if (!/[A-Z]/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain at least one uppercase letter (A-Z).'
+      });
+    }
+    if (!/[a-z]/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain at least one lowercase letter (a-z).'
+      });
+    }
+
     const usersCol = getCollection('users');
     const existing = await usersCol.findOne({ email: email.toLowerCase() });
     if (existing) {
