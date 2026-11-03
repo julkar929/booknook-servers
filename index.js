@@ -582,6 +582,54 @@ app.get('/borrows', verifyToken, async (req, res) => {
   }
 });
 
+// 8. DELETE /borrows/:id — return a book (protected with JWT)
+// When returned, increase book copies by 1 with $inc
+app.delete('/borrows/:id', verifyToken, async (req, res) => {
+  try {
+    const borrowId = req.params.id;
+    const borrowsCol = getCollection('borrows');
+    const booksCol = getCollection('books');
+
+    const borrow = await borrowsCol.findOne({ _id: formatId(borrowId) });
+    if (!borrow) {
+      return res.status(404).json({
+        success: false,
+        message: 'Borrow record not found.'
+      });
+    }
+
+    // Verify that the borrow record belongs to this user
+    if (borrow.userEmail !== req.user.email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: You can only return your own borrowed books.'
+      });
+    }
+
+    // Increase book copies by 1 using $inc
+    if (borrow.bookId) {
+      await booksCol.updateOne(
+        { _id: formatId(borrow.bookId) },
+        { $inc: { copies: 1 } }
+      );
+    }
+
+    // Remove borrow record
+    await borrowsCol.deleteOne({ _id: formatId(borrowId) });
+
+    return res.json({
+      success: true,
+      message: `"${borrow.bookTitle}" has been returned successfully! Thank you for reading.`
+    });
+  } catch (error) {
+    console.error('Error returning book:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to process book return.'
+    });
+  }
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled Server Error:', err);
